@@ -1,0 +1,10 @@
+{
+  "name": "Disaster Volunteer Network",
+  "description": "Mobile-first disaster response and recovery application connecting people affected by disasters with volunteers, organizations, and recovery service providers.",
+  "requestFramePermissions": [
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
