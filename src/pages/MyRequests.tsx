@@ -96,7 +96,7 @@ export default function MyRequests() {
                 <div className="grid grid-cols-2 gap-4 text-sm text-neutral-600">
                   <div className="flex items-center gap-2">
                     <MapPin className="w-4 h-4 text-neutral-400" />
-                    <span className="truncate">{req.location.address || 'GPS Location'}</span>
+                    <span className="truncate">{req.location?.address || 'GPS Location'}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Users className="w-4 h-4 text-neutral-400" />

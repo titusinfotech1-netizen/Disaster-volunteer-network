@@ -8,6 +8,7 @@ interface AuthContextType {
   login: (name: string, role: Role, phone: string) => void;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
+  updateProfile: (updated: Partial<UserProfile>) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -37,6 +38,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUserProfile(newProfile);
   };
 
+  const updateProfile = (updated: Partial<UserProfile>) => {
+    if (!userProfile) return;
+    const newProfile = { ...userProfile, ...updated };
+    localStorage.setItem('mock_user_profile', JSON.stringify(newProfile));
+    setUserProfile(newProfile);
+  };
+
   const signOut = async () => {
     localStorage.removeItem('mock_user_profile');
     setUserProfile(null);
@@ -51,7 +59,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       loading, 
       login, 
       signOut, 
-      refreshProfile 
+      refreshProfile,
+      updateProfile
     }}>
       {!loading && children}
     </AuthContext.Provider>

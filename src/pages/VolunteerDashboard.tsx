@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { collection, query, where, doc, updateDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
@@ -7,11 +8,17 @@ import { MapPin, Users, AlertTriangle, CheckCircle, Navigation, ShieldAlert, Fil
 
 export default function VolunteerDashboard() {
   const { userProfile } = useAuth();
+  const navigate = useNavigate();
   const [tasks, setTasks] = useState<(Request & { id: string })[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!userProfile) return;
+
+    if (userProfile.role !== 'volunteer') {
+      navigate('/volunteer-onboarding');
+      return;
+    }
 
     setLoading(true);
 
@@ -22,7 +29,13 @@ export default function VolunteerDashboard() {
     let assignedTasks: (Request & { id: string })[] = [];
 
     const updateTasks = () => {
-      const allTasks = [...openTasks, ...assignedTasks].sort((a, b) => b.priorityScore - a.priorityScore);
+      // De-duplicate tasks by ID
+      const merged = [...openTasks, ...assignedTasks];
+      const uniqueMap = new Map<string, Request & { id: string }>();
+      merged.forEach(task => {
+        uniqueMap.set(task.id, task);
+      });
+      const allTasks = Array.from(uniqueMap.values()).sort((a, b) => (b.priorityScore || 0) - (a.priorityScore || 0));
       setTasks(allTasks);
       setLoading(false);
     };
@@ -30,11 +43,17 @@ export default function VolunteerDashboard() {
     const unsubOpen = onSnapshot(qOpen, (snapshot) => {
       openTasks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Request & { id: string }));
       updateTasks();
+    }, (error) => {
+      console.error("Error fetching open tasks in real-time:", error);
+      setLoading(false);
     });
 
     const unsubAssigned = onSnapshot(qAssigned, (snapshot) => {
       assignedTasks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Request & { id: string }));
       updateTasks();
+    }, (error) => {
+      console.error("Error fetching assigned tasks in real-time:", error);
+      setLoading(false);
     });
 
     return () => {
@@ -115,7 +134,7 @@ export default function VolunteerDashboard() {
                 <div className="space-y-2 mb-6">
                   <div className="flex items-center text-emerald-700 text-sm gap-2">
                     <MapPin className="w-4 h-4 shrink-0" />
-                    <span className="truncate">{task.location.address || 'GPS Location'}</span>
+                    <span className="truncate">{task.location?.address || 'GPS Location'}</span>
                   </div>
                   <div className="flex items-center text-emerald-700 text-sm gap-2">
                     <Users className="w-4 h-4 shrink-0" />
@@ -176,7 +195,7 @@ export default function VolunteerDashboard() {
                 <div className="space-y-2 mb-6">
                   <div className="flex items-center text-neutral-500 text-sm gap-2">
                     <MapPin className="w-4 h-4 shrink-0 text-blue-500" />
-                    <span className="truncate">{task.location.address || 'GPS Location'}</span>
+                    <span className="truncate">{task.location?.address || 'GPS Location'}</span>
                   </div>
                   <div className="flex items-center text-neutral-500 text-sm gap-2">
                     <Users className="w-4 h-4 shrink-0 text-amber-500" />

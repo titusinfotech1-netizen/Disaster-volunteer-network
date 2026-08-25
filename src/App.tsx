@@ -14,6 +14,7 @@ import Home from './pages/Home';
 import Login from './pages/Login';
 import RequestHelp from './pages/RequestHelp';
 import VolunteerDashboard from './pages/VolunteerDashboard';
+import VolunteerOnboarding from './pages/VolunteerOnboarding';
 import LiveMap from './pages/LiveMap';
 import MyRequests from './pages/MyRequests';
 
@@ -28,6 +29,7 @@ export default function App() {
             <Route path="/" element={<Home />} />
             <Route path="/request-help" element={<RequestHelp />} />
             <Route path="/volunteer-dashboard" element={<VolunteerDashboard />} />
+            <Route path="/volunteer-onboarding" element={<VolunteerOnboarding />} />
             <Route path="/map" element={<LiveMap />} />
             <Route path="/requests" element={<MyRequests />} />
           </Route>
