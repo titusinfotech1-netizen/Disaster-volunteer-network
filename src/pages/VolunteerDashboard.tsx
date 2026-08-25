@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { collection, query, where, getDocs, doc, updateDoc, orderBy } from 'firebase/firestore';
+import { collection, query, where, doc, updateDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { Request } from '../types';
@@ -11,31 +11,37 @@ export default function VolunteerDashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchTasks();
-  }, [userProfile]);
+    if (!userProfile) return;
 
-  const fetchTasks = async () => {
     setLoading(true);
-    try {
-      // First get open requests
-      const q = query(collection(db, 'requests'), where('status', 'in', ['submitted', 'verified']));
-      const querySnapshot = await getDocs(q);
-      const openTasks = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Request & { id: string }));
-      
-      // Then get tasks assigned to this volunteer
-      const qAssigned = query(collection(db, 'requests'), where('assignedVolunteerId', '==', userProfile?.id));
-      const assignedSnapshot = await getDocs(qAssigned);
-      const assignedTasks = assignedSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Request & { id: string }));
 
-      // Merge and sort by priority score
+    const qOpen = query(collection(db, 'requests'), where('status', 'in', ['submitted', 'verified']));
+    const qAssigned = query(collection(db, 'requests'), where('assignedVolunteerId', '==', userProfile.id));
+
+    let openTasks: (Request & { id: string })[] = [];
+    let assignedTasks: (Request & { id: string })[] = [];
+
+    const updateTasks = () => {
       const allTasks = [...openTasks, ...assignedTasks].sort((a, b) => b.priorityScore - a.priorityScore);
       setTasks(allTasks);
-    } catch (error) {
-      console.error("Error fetching tasks", error);
-    } finally {
       setLoading(false);
-    }
-  };
+    };
+
+    const unsubOpen = onSnapshot(qOpen, (snapshot) => {
+      openTasks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Request & { id: string }));
+      updateTasks();
+    });
+
+    const unsubAssigned = onSnapshot(qAssigned, (snapshot) => {
+      assignedTasks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Request & { id: string }));
+      updateTasks();
+    });
+
+    return () => {
+      unsubOpen();
+      unsubAssigned();
+    };
+  }, [userProfile]);
 
   const handleAcceptTask = async (taskId: string) => {
     try {
@@ -45,7 +51,6 @@ export default function VolunteerDashboard() {
         volunteerName: userProfile?.name,
         volunteerPhone: userProfile?.phone
       });
-      fetchTasks();
     } catch (error) {
       console.error("Failed to accept task", error);
     }
@@ -56,7 +61,6 @@ export default function VolunteerDashboard() {
       await updateDoc(doc(db, 'requests', taskId), {
         status: newStatus
       });
-      fetchTasks();
     } catch (error) {
       console.error("Failed to update status", error);
     }

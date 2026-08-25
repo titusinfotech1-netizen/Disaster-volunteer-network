@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Request } from '../types';
 
@@ -39,20 +39,18 @@ export default function LiveMap() {
   const defaultCenter: [number, number] = [37.7749, -122.4194]; 
 
   useEffect(() => {
-    const fetchLocations = async () => {
-      try {
-        const q = query(collection(db, 'requests'), where('status', 'in', ['submitted', 'verified', 'assigned', 'in_progress']));
-        const snapshot = await getDocs(q);
-        const reqs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Request));
-        // Filter out those without valid coordinates
-        setRequests(reqs.filter(r => r.location && r.location.lat && r.location.lng));
-      } catch (error) {
-        console.error("Error fetching map data", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchLocations();
+    const q = query(collection(db, 'requests'), where('status', 'in', ['submitted', 'verified', 'assigned', 'in_progress']));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const reqs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Request));
+      // Filter out those without valid coordinates
+      setRequests(reqs.filter(r => r.location && r.location.lat && r.location.lng));
+      setLoading(false);
+    }, (error) => {
+      console.error("Error fetching map data", error);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
   }, []);
 
   return (

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { Request } from '../types';
@@ -11,25 +11,26 @@ export default function MyRequests() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchRequests = async () => {
-      if (!userProfile) return;
-      try {
-        const q = query(
-          collection(db, 'requests'),
-          where('requesterId', '==', userProfile.id)
-        );
-        const snapshot = await getDocs(q);
-        const reqs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as (Request & { id: string, displayId?: string })));
-        // sort client side since we don't have a composite index for requesterId + createdAt
-        reqs.sort((a, b) => b.createdAt - a.createdAt);
-        setRequests(reqs);
-      } catch (error) {
-        console.error("Error fetching requests", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchRequests();
+    if (!userProfile) return;
+    
+    setLoading(true);
+    const q = query(
+      collection(db, 'requests'),
+      where('requesterId', '==', userProfile.id)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const reqs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as (Request & { id: string, displayId?: string })));
+      // sort client side since we don't have a composite index for requesterId + createdAt
+      reqs.sort((a, b) => b.createdAt - a.createdAt);
+      setRequests(reqs);
+      setLoading(false);
+    }, (error) => {
+      console.error("Error fetching requests", error);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
   }, [userProfile]);
 
   const getStatusColor = (status: string) => {
