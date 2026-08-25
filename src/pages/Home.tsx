@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { HeartHandshake, AlertTriangle, MapPin, Activity } from 'lucide-react';
+import { HeartHandshake, AlertTriangle, MapPin, Search, Users, Activity, PhoneCall } from 'lucide-react';
 import { collection, query, where, getDocs, limit, orderBy } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Request } from '../types';
@@ -67,11 +67,19 @@ export default function Home() {
       </div>
 
       {/* Secondary Quick Links Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-1 gap-4 mt-8 max-w-sm mx-auto">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mt-8">
         <Link to="/map" className="flex flex-col items-center justify-center p-4 bg-white rounded-xl border border-neutral-200 hover:border-blue-300 hover:shadow-sm transition-all text-center group">
           <MapPin className="w-8 h-8 text-blue-500 mb-2 group-hover:scale-110 transition-transform" />
           <span className="text-sm font-medium text-neutral-700">Live Map</span>
         </Link>
+        <Link to="/requests" className="flex flex-col items-center justify-center p-4 bg-white rounded-xl border border-neutral-200 hover:border-amber-300 hover:shadow-sm transition-all text-center group">
+          <Search className="w-8 h-8 text-amber-500 mb-2 group-hover:scale-110 transition-transform" />
+          <span className="text-sm font-medium text-neutral-700">Active Requests</span>
+        </Link>
+        <div className="flex flex-col items-center justify-center p-4 bg-white rounded-xl border border-neutral-200 hover:border-rose-300 hover:shadow-sm transition-all text-center group cursor-pointer" onClick={() => alert('Dialing local emergency services...')}>
+          <PhoneCall className="w-8 h-8 text-rose-500 mb-2 group-hover:scale-110 transition-transform" />
+          <span className="text-sm font-medium text-neutral-700">Emergency Call</span>
+        </div>
       </div>
 
       {/* Active Disaster Alerts */}
