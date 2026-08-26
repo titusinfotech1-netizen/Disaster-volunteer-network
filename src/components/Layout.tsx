@@ -1,6 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { db } from '../lib/firebase';
+import toast, { Toaster } from 'react-hot-toast';
+import { Request } from '../types';
 import { Menu, X, Home, Map, ClipboardList, Settings, User, LogOut, HeartHandshake, FileText, Bell } from 'lucide-react';
 
 export default function Layout() {
@@ -8,8 +12,47 @@ export default function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const mountedAtRef = useRef(Date.now());
+  const hasLoadedInitialRef = useRef(false);
+
+  useEffect(() => {
+    const q = query(
+      collection(db, 'requests'), 
+      where('status', '==', 'submitted')
+    );
+
+    const unsub = onSnapshot(q, (snapshot) => {
+      if (!hasLoadedInitialRef.current) {
+        hasLoadedInitialRef.current = true;
+        return;
+      }
+
+      snapshot.docChanges().forEach((change) => {
+        if (change.type === 'added') {
+          const req = change.doc.data() as Request;
+          if (req.createdAt && req.createdAt >= mountedAtRef.current) {
+             setUnreadCount(prev => prev + 1);
+             toast(`New Emergency Request: ${req.type} in your area!`, {
+               icon: '🚨',
+               duration: 5000,
+               style: {
+                 borderRadius: '12px',
+                 background: '#fff',
+                 color: '#171717',
+                 fontWeight: 'bold'
+               },
+             });
+          }
+        }
+      });
+    });
+
+    return () => unsub();
+  }, []);
 
   const handleSignOut = async () => {
+
     try {
       await signOut();
       navigate('/login');
@@ -64,9 +107,22 @@ export default function Layout() {
               </div>
             </div>
             <div className="hidden sm:ml-6 sm:flex sm:items-center space-x-4">
-              <button className="p-2 text-neutral-400 hover:text-neutral-500 relative">
+              <button 
+                onClick={() => {
+                  setUnreadCount(0);
+                  if (userProfile?.role === 'volunteer') {
+                    navigate('/volunteer-dashboard');
+                  }
+                }}
+                className="p-2 text-neutral-400 hover:text-neutral-500 relative"
+                title="Notifications"
+              >
                 <Bell className="w-6 h-6" />
-                <span className="absolute top-1 right-1 block h-2 w-2 rounded-full bg-red-500 ring-2 ring-white"></span>
+                {unreadCount > 0 && (
+                  <span className="absolute top-1 right-1 flex items-center justify-center h-4 w-4 rounded-full bg-red-500 ring-2 ring-white text-[10px] font-bold text-white">
+                    {unreadCount}
+                  </span>
+                )}
               </button>
               
               <div className="relative">
@@ -141,6 +197,7 @@ export default function Layout() {
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8">
         <Outlet />
       </main>
+      <Toaster position="top-right" />
     </div>
   );
 }
