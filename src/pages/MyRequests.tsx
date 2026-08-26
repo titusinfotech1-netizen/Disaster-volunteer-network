@@ -3,7 +3,7 @@ import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { Request } from '../types';
-import { FileText, MapPin, Users, Clock, ArrowRight } from 'lucide-react';
+import { FileText, MapPin, Users, Clock, ArrowRight, Phone } from 'lucide-react';
 
 export default function MyRequests() {
   const { userProfile } = useAuth();
@@ -109,10 +109,21 @@ export default function MyRequests() {
                 </div>
 
                 {req.volunteerName && (
-                  <div className="mt-4 p-4 bg-amber-50 border border-amber-100 rounded-xl flex flex-col gap-1">
-                    <h4 className="text-xs font-bold text-amber-800 uppercase tracking-wider mb-1">Assigned Volunteer</h4>
-                    <span className="text-sm font-bold text-neutral-900">{req.volunteerName}</span>
-                    <span className="text-sm text-neutral-600">{req.volunteerPhone}</span>
+                  <div className="mt-4 p-4 bg-amber-50 border border-amber-100 rounded-xl flex items-center justify-between gap-4">
+                    <div className="flex flex-col gap-1">
+                      <h4 className="text-xs font-bold text-amber-800 uppercase tracking-wider mb-1">Assigned Volunteer</h4>
+                      <span className="text-sm font-bold text-neutral-900">{req.volunteerName}</span>
+                      <span className="text-sm text-neutral-600">{req.volunteerPhone}</span>
+                    </div>
+                    {req.volunteerPhone && (
+                      <a 
+                        href={`tel:${req.volunteerPhone}`}
+                        className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white text-sm font-bold rounded-lg hover:bg-red-700 transition-colors shadow-sm whitespace-nowrap"
+                      >
+                        <Phone className="w-4 h-4" />
+                        Call Volunteer
+                      </a>
+                    )}
                   </div>
                 )}
               </div>

@@ -4,7 +4,7 @@ import { collection, query, where, doc, updateDoc, onSnapshot } from 'firebase/f
 import { db } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { Request } from '../types';
-import { MapPin, Users, AlertTriangle, CheckCircle, Navigation, ShieldAlert, FileText } from 'lucide-react';
+import { MapPin, Users, AlertTriangle, CheckCircle, Navigation, ShieldAlert, FileText, Phone } from 'lucide-react';
 
 export default function VolunteerDashboard() {
   const { userProfile } = useAuth();
@@ -141,10 +141,21 @@ export default function VolunteerDashboard() {
                     <span>{task.peopleAffected} people affected</span>
                   </div>
                   
-                  <div className="mt-4 p-3 bg-white rounded-lg border border-emerald-100 flex flex-col gap-1">
-                    <h4 className="text-xs font-bold text-emerald-800 uppercase tracking-wider mb-1">Requester Contact</h4>
-                    <span className="text-sm font-bold text-neutral-900">{task.requesterName || 'Unknown'}</span>
-                    <span className="text-sm text-neutral-600">{task.requesterPhone || 'No phone provided'}</span>
+                  <div className="mt-4 p-3 bg-white rounded-lg border border-emerald-100 flex items-center justify-between gap-2">
+                    <div className="flex flex-col gap-1">
+                      <h4 className="text-xs font-bold text-emerald-800 uppercase tracking-wider mb-1">Requester Contact</h4>
+                      <span className="text-sm font-bold text-neutral-900">{task.requesterName || 'Unknown'}</span>
+                      <span className="text-sm text-neutral-600">{task.requesterPhone || 'No phone provided'}</span>
+                    </div>
+                    {task.requesterPhone && (
+                      <a
+                        href={`tel:${task.requesterPhone}`}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-red-100 text-red-700 hover:bg-red-200 transition-colors rounded-md text-xs font-bold border border-red-200 whitespace-nowrap"
+                      >
+                        <Phone className="w-3.5 h-3.5" />
+                        Call
+                      </a>
+                    )}
                   </div>
                 </div>
 
