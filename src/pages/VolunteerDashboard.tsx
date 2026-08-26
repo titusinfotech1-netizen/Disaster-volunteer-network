@@ -155,9 +155,14 @@ export default function VolunteerDashboard() {
                     </button>
                   )}
                   {task.status === 'in_progress' && (
-                    <button onClick={() => handleUpdateStatus(task.id, 'completed')} className="col-span-2 py-2 bg-emerald-800 text-white rounded-lg font-medium hover:bg-emerald-900 text-sm">
-                      Mark Completed
-                    </button>
+                    <>
+                      <button onClick={() => navigate(`/track/${task.id}`)} className="py-2 bg-neutral-900 text-white rounded-lg font-medium hover:bg-neutral-800 text-sm">
+                        Live GPS Track
+                      </button>
+                      <button onClick={() => handleUpdateStatus(task.id, 'completed')} className="py-2 bg-emerald-800 text-white rounded-lg font-medium hover:bg-emerald-900 text-sm">
+                        Mark Completed
+                      </button>
+                    </>
                   )}
                 </div>
               </div>

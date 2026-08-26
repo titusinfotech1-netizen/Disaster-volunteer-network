@@ -17,6 +17,7 @@ import VolunteerDashboard from './pages/VolunteerDashboard';
 import VolunteerOnboarding from './pages/VolunteerOnboarding';
 import LiveMap from './pages/LiveMap';
 import MyRequests from './pages/MyRequests';
+import TaskTracker from './pages/TaskTracker';
 
 export default function App() {
   return (
@@ -30,6 +31,7 @@ export default function App() {
             <Route path="/request-help" element={<RequestHelp />} />
             <Route path="/volunteer-dashboard" element={<VolunteerDashboard />} />
             <Route path="/volunteer-onboarding" element={<VolunteerOnboarding />} />
+            <Route path="/track/:id" element={<TaskTracker />} />
             <Route path="/map" element={<LiveMap />} />
             <Route path="/requests" element={<MyRequests />} />
           </Route>
