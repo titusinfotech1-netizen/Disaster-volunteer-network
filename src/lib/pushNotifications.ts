@@ -13,6 +13,41 @@ export interface NotificationPayload {
   data?: Record<string, unknown>;
 }
 
+export interface RequestPermissionResult {
+  permission: NotificationPermission | 'unsupported';
+  success: boolean;
+  isInIframe: boolean;
+  message: string;
+}
+
+// Detect if running inside an iframe (e.g. AI Studio preview)
+export function isInIframe(): boolean {
+  try {
+    return typeof window !== 'undefined' && window.self !== window.top;
+  } catch {
+    return true;
+  }
+}
+
+// Detect iOS devices (iPhone, iPad)
+export function isIOS(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  return (
+    /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+  );
+}
+
+// Detect if running as standalone installed PWA
+export function isStandalonePWA(): boolean {
+  if (typeof window === 'undefined') return false;
+  return (
+    window.matchMedia('(display-mode: standalone)').matches ||
+    // @ts-expect-error iOS Safari proprietary property
+    window.navigator.standalone === true
+  );
+}
+
 // Synthesize an audible emergency alert chime via Web Audio API
 export function playEmergencyAlertSound() {
   try {
@@ -70,7 +105,11 @@ export function isPushNotificationSupported(): boolean {
 // Current status of browser notification permissions
 export function getNotificationPermissionStatus(): NotificationPermission | 'unsupported' {
   if (!isPushNotificationSupported()) return 'unsupported';
-  return Notification.permission;
+  try {
+    return Notification.permission;
+  } catch {
+    return 'unsupported';
+  }
 }
 
 // Register service worker for native mobile notification tray integration
@@ -90,32 +129,97 @@ export async function registerPushServiceWorker(): Promise<ServiceWorkerRegistra
   }
 }
 
-// Request permission from the user
-export async function requestPushNotificationPermission(): Promise<NotificationPermission | 'unsupported'> {
+// Request permission from the user with full diagnostics and iframe protection
+export async function requestPushNotificationPermission(): Promise<RequestPermissionResult> {
+  if (typeof window === 'undefined') {
+    return {
+      permission: 'unsupported',
+      success: false,
+      isInIframe: false,
+      message: 'Window object not available',
+    };
+  }
+
+  const inIframe = isInIframe();
+  if (inIframe) {
+    return {
+      permission: isPushNotificationSupported() ? Notification.permission : 'unsupported',
+      success: false,
+      isInIframe: true,
+      message: 'Browser security blocks notification requests inside preview frames. Please open the app in a new tab.',
+    };
+  }
+
   if (!isPushNotificationSupported()) {
-    return 'unsupported';
+    return {
+      permission: 'unsupported',
+      success: false,
+      isInIframe: false,
+      message: isIOS()
+        ? 'iOS Safari requires adding this app to your Home Screen first to enable Web Push.'
+        : 'Web Push notifications are not supported in this browser.',
+    };
   }
 
   try {
-    // Register service worker first
-    await registerPushServiceWorker();
-    
-    // Request native permission
-    const permission = await Notification.requestPermission();
+    // Non-blocking attempt to register Service Worker
+    registerPushServiceWorker().catch(() => {});
+
+    // Support both Promise and callback forms of Notification.requestPermission
+    let permission: NotificationPermission;
+    const req = Notification.requestPermission();
+    if (req && typeof req.then === 'function') {
+      permission = await req;
+    } else {
+      permission = await new Promise<NotificationPermission>((resolve) => {
+        Notification.requestPermission((p) => resolve(p));
+      });
+    }
+
     if (permission === 'granted') {
       // Send welcome / confirmation push
-      await triggerMobilePushNotification({
+      triggerMobilePushNotification({
         title: '🔔 Mobile Alerts Activated',
         body: 'You will now receive instant push alerts for emergency tasks in your area.',
         tag: 'welcome-alert',
         playSound: true,
         vibrate: true,
-      });
+      }).catch(() => {});
+
+      return {
+        permission: 'granted',
+        success: true,
+        isInIframe: false,
+        message: 'Mobile push notifications successfully enabled!',
+      };
+    } else if (permission === 'denied') {
+      return {
+        permission: 'denied',
+        success: false,
+        isInIframe: false,
+        message: 'Notifications are blocked in your browser settings. Please allow notifications in site settings.',
+      };
+    } else {
+      return {
+        permission: 'default',
+        success: false,
+        isInIframe: false,
+        message: 'Notification permission request was dismissed.',
+      };
     }
-    return permission;
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error requesting notification permission:', error);
-    return 'denied';
+    const errMessage = error instanceof Error ? error.message : String(error);
+    const isFrameError = errMessage.includes('top-level browsing context') || errMessage.includes('SecurityError');
+
+    return {
+      permission: 'denied',
+      success: false,
+      isInIframe: isFrameError || inIframe,
+      message: isFrameError
+        ? 'Browser security blocks notification requests inside preview frames. Please open the app in a new tab.'
+        : errMessage,
+    };
   }
 }
 

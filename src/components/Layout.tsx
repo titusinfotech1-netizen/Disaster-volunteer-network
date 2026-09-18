@@ -5,11 +5,14 @@ import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import toast, { Toaster } from 'react-hot-toast';
 import { Request } from '../types';
-import { Menu, X, Home, Map, ClipboardList, Settings, User, LogOut, HeartHandshake, FileText, Bell, Smartphone, Sparkles } from 'lucide-react';
+import { Menu, X, Home, Map, ClipboardList, Settings, User, LogOut, HeartHandshake, FileText, Bell, Smartphone, Sparkles, ExternalLink } from 'lucide-react';
 import { 
   getNotificationPermissionStatus, 
   requestPushNotificationPermission, 
-  triggerMobilePushNotification 
+  triggerMobilePushNotification,
+  isInIframe,
+  playEmergencyAlertSound,
+  triggerDeviceVibration
 } from '../lib/pushNotifications';
 import NotificationSettingsModal from './NotificationSettingsModal';
 
@@ -22,10 +25,13 @@ export default function Layout() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [permissionStatus, setPermissionStatus] = useState<NotificationPermission | 'unsupported'>('default');
   const [showPermissionBanner, setShowPermissionBanner] = useState(true);
+  const [isIframeDetected, setIsIframeDetected] = useState(false);
+  const [isEnabling, setIsEnabling] = useState(false);
   const mountedAtRef = useRef(Date.now());
   const hasLoadedInitialRef = useRef(false);
 
   useEffect(() => {
+    setIsIframeDetected(isInIframe());
     setPermissionStatus(getNotificationPermissionStatus());
   }, []);
 
@@ -136,11 +142,34 @@ export default function Layout() {
   }, [userProfile?.id, userProfile?.role]);
 
   const handleEnablePushBanner = async () => {
-    const res = await requestPushNotificationPermission();
-    setPermissionStatus(res);
-    if (res === 'granted') {
-      setShowPermissionBanner(false);
-      toast.success('Mobile push notifications activated!');
+    if (isInIframe()) {
+      setIsNotifModalOpen(true);
+      toast('Open in a new tab to grant device push permissions', {
+        icon: '📲',
+        duration: 5000,
+      });
+      return;
+    }
+
+    setIsEnabling(true);
+    try {
+      const res = await requestPushNotificationPermission();
+      setPermissionStatus(res.permission);
+      if (res.success) {
+        setShowPermissionBanner(false);
+        toast.success('Mobile push alerts activated!', { icon: '🔔' });
+        playEmergencyAlertSound();
+        triggerDeviceVibration();
+      } else {
+        toast.error(res.message, { duration: 5000 });
+        setIsNotifModalOpen(true);
+      }
+    } catch (err) {
+      console.error('Failed to enable push alerts:', err);
+      toast.error('Could not enable notifications. Opening settings...');
+      setIsNotifModalOpen(true);
+    } finally {
+      setIsEnabling(false);
     }
   };
 
@@ -270,15 +299,35 @@ export default function Layout() {
                 <Smartphone className="w-4 h-4 text-white" />
               </div>
               <div className="truncate">
-                <span className="font-bold">Mobile Device Alerts:</span> Get instant push notifications & sound on your phone when tasks are created.
+                <span className="font-bold">Mobile Device Alerts:</span> Get instant push notifications & sirens on your phone when tasks are created.
               </div>
             </div>
             <div className="flex items-center gap-2 shrink-0 ml-3">
+              {isIframeDetected ? (
+                <a
+                  href={window.location.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 px-3 py-1 bg-white text-red-700 font-bold rounded-lg hover:bg-red-50 transition-colors shadow-xs text-xs whitespace-nowrap cursor-pointer"
+                >
+                  <span>Open in New Tab to Enable</span>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+              ) : (
+                <button
+                  onClick={handleEnablePushBanner}
+                  disabled={isEnabling}
+                  className="inline-flex items-center gap-1.5 px-3 py-1 bg-white text-red-700 font-bold rounded-lg hover:bg-red-50 transition-colors shadow-xs text-xs whitespace-nowrap cursor-pointer disabled:opacity-75"
+                >
+                  {isEnabling ? 'Enabling...' : 'Enable on Phone'}
+                </button>
+              )}
               <button
-                onClick={handleEnablePushBanner}
-                className="px-3 py-1 bg-white text-red-700 font-bold rounded-lg hover:bg-red-50 transition-colors shadow-xs text-xs whitespace-nowrap"
+                onClick={() => setIsNotifModalOpen(true)}
+                className="px-2 py-1 bg-red-800/60 hover:bg-red-800 text-white font-medium rounded-lg transition-colors text-xs whitespace-nowrap"
+                title="Settings & Guide"
               >
-                Enable on Phone
+                Settings
               </button>
               <button
                 onClick={() => setShowPermissionBanner(false)}
