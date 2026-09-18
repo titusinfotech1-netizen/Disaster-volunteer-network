@@ -7,6 +7,7 @@ import {
   playEmergencyAlertSound,
   triggerDeviceVibration,
   isInIframe,
+  isAndroidApk,
   isIOS,
   isStandalonePWA
 } from '../lib/pushNotifications';
@@ -20,6 +21,7 @@ interface NotificationSettingsModalProps {
 export default function NotificationSettingsModal({ isOpen, onClose }: NotificationSettingsModalProps) {
   const [permission, setPermission] = useState<NotificationPermission | 'unsupported'>('default');
   const [inIframe, setInIframe] = useState(false);
+  const [isApk, setIsApk] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
     return localStorage.getItem('dvn_alert_sound') !== 'false';
   });
@@ -34,6 +36,7 @@ export default function NotificationSettingsModal({ isOpen, onClose }: Notificat
     if (isOpen) {
       setPermission(getNotificationPermissionStatus());
       setInIframe(isInIframe());
+      setIsApk(isAndroidApk());
     }
   }, [isOpen]);
 
@@ -51,7 +54,7 @@ export default function NotificationSettingsModal({ isOpen, onClose }: Notificat
   };
 
   const handleRequestPermission = async () => {
-    if (inIframe) {
+    if (inIframe && !isApk) {
       window.open(window.location.href, '_blank');
       toast('Opening in a new tab to enable notifications...', { icon: '↗️' });
       return;
@@ -62,7 +65,7 @@ export default function NotificationSettingsModal({ isOpen, onClose }: Notificat
       const res = await requestPushNotificationPermission();
       setPermission(res.permission);
       if (res.success) {
-        toast.success(res.message);
+        toast.success(res.isApk ? 'Android phone notifications enabled!' : res.message);
         if (soundEnabled) playEmergencyAlertSound();
         if (vibrationEnabled) triggerDeviceVibration();
       } else {
@@ -88,12 +91,12 @@ export default function NotificationSettingsModal({ isOpen, onClose }: Notificat
       
       const sent = await testMobilePushNotification();
       if (sent) {
-        toast.success('Alert pushed to your device! Check your notification bar.', {
+        toast.success(isApk ? 'Alert delivered to Android notification drawer!' : 'Alert pushed to your device! Check your notification bar.', {
           icon: '📲',
           duration: 4500
         });
       } else {
-        toast('Emergency test chime played! (Grant OS permission to see tray notifications)', {
+        toast('Emergency test chime & vibration played!', {
           icon: '🚨',
           duration: 4500
         });
@@ -150,8 +153,19 @@ export default function NotificationSettingsModal({ isOpen, onClose }: Notificat
 
         {/* Scrollable Content */}
         <div className="p-5 space-y-4 overflow-y-auto">
+          {/* APK Native Banner indicator */}
+          {isApk && (
+            <div className="px-3.5 py-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                <span className="font-bold">Android APK Mode Active:</span> Native Android status bar & heads-up alerts.
+              </div>
+              <span className="text-[11px] font-semibold bg-emerald-200 text-emerald-900 px-2 py-0.5 rounded-md">Native OS</span>
+            </div>
+          )}
+
           {/* If inside iframe: explain browser restriction & provide direct 1-click open */}
-          {inIframe && (
+          {inIframe && !isApk && (
             <div className="p-4 rounded-xl border border-amber-200 bg-amber-50 text-amber-950 space-y-2.5">
               <div className="flex items-start gap-2.5">
                 <Info className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
@@ -198,25 +212,33 @@ export default function NotificationSettingsModal({ isOpen, onClose }: Notificat
             
             <div className="text-sm">
               <div className="font-bold flex items-center gap-1.5">
-                {permission === 'granted' && 'Push Notifications Active'}
-                {permission === 'denied' && 'Notifications Blocked by Browser'}
-                {permission === 'default' && 'Device Permissions Not Yet Granted'}
-                {permission === 'unsupported' && 'Browser Support Note'}
+                {permission === 'granted' && (isApk ? 'Android Native Alerts Active' : 'Push Notifications Active')}
+                {permission === 'denied' && (isApk ? 'Android Notification Permission Denied' : 'Notifications Blocked by Browser')}
+                {permission === 'default' && (isApk ? 'Android Notification Permission Needed' : 'Device Permissions Not Yet Granted')}
+                {permission === 'unsupported' && (isApk ? 'Android Local Notifications Ready' : 'Browser Support Note')}
               </div>
               <p className="text-xs mt-1 text-neutral-600">
-                {permission === 'granted' && 'Your device will receive instant push notifications, audible sirens, and vibrations when new emergency tasks arrive.'}
-                {permission === 'denied' && 'Push notifications are currently blocked in your browser settings. To allow them: tap the lock or tune icon in your address bar and set Notifications to "Allow", then reload.'}
-                {permission === 'default' && 'Click the button below to grant permission. Your browser will show a prompt to allow notifications.'}
-                {permission === 'unsupported' && (isIosDevice 
-                  ? 'On iOS Safari, Apple requires adding the app to your Home Screen to receive Web Push.'
-                  : 'Your browser environment does not support Web Push notifications.')}
+                {permission === 'granted' && (isApk 
+                  ? 'Your Android device will receive status bar notifications, sirens, and vibrations when new emergency tasks arrive.'
+                  : 'Your device will receive instant push notifications, audible sirens, and vibrations when new emergency tasks arrive.')}
+                {permission === 'denied' && (isApk
+                  ? 'Notifications are disabled for this app. Go to Android Settings > Apps > Disaster Volunteer Network > Notifications and switch them to "Allow".'
+                  : 'Push notifications are currently blocked in your browser settings. To allow them: tap the lock or tune icon in your address bar and set Notifications to "Allow", then reload.')}
+                {permission === 'default' && (isApk
+                  ? 'Tap the button below to allow Android to display emergency notifications on your status bar and lock screen.'
+                  : 'Click the button below to grant permission. Your browser will show a prompt to allow notifications.')}
+                {permission === 'unsupported' && (isApk
+                  ? 'Android notification channels are initialized and ready.'
+                  : (isIosDevice 
+                    ? 'On iOS Safari, Apple requires adding the app to your Home Screen to receive Web Push.'
+                    : 'Your browser environment does not support Web Push notifications.'))}
               </p>
             </div>
           </div>
 
           {/* Action to Enable if not granted */}
           {permission !== 'granted' && (
-            inIframe ? (
+            inIframe && !isApk ? (
               <a
                 href={window.location.href}
                 target="_blank"
@@ -230,10 +252,10 @@ export default function NotificationSettingsModal({ isOpen, onClose }: Notificat
               <button
                 onClick={handleRequestPermission}
                 disabled={isRequesting}
-                className="w-full py-3 px-4 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl transition-colors shadow-sm flex items-center justify-center gap-2 text-sm disabled:opacity-75"
+                className="w-full py-3 px-4 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl transition-colors shadow-sm flex items-center justify-center gap-2 text-sm disabled:opacity-75 cursor-pointer"
               >
                 <Smartphone className="w-5 h-5" />
-                {isRequesting ? 'Requesting Permission...' : 'Enable Mobile Push Notifications'}
+                {isRequesting ? 'Requesting Android Permission...' : (isApk ? 'Enable Android Device Notifications' : 'Enable Mobile Push Notifications')}
               </button>
             )
           )}
@@ -303,7 +325,10 @@ export default function NotificationSettingsModal({ isOpen, onClose }: Notificat
             </div>
             <ul className="list-disc pl-4 space-y-1.5">
               <li>
-                <strong className="text-neutral-800">Android Phones (Chrome / Edge / Firefox):</strong> Open the link directly on your phone and tap <em>"Allow"</em> when prompted for notifications. Alerts will appear in your top notification tray.
+                <strong className="text-neutral-800">Android APK (Installed App):</strong> Tap "Enable Android Device Notifications" above to allow system notifications. In Android Phone Settings &gt; Apps &gt; Disaster Volunteer Network, ensure notifications and alarms are permitted and battery optimization is set to "Unrestricted" so alerts fire even when your phone is sleeping.
+              </li>
+              <li>
+                <strong className="text-neutral-800">Android Web Browser (Chrome / Edge / Firefox):</strong> Open the link directly on your phone and tap <em>"Allow"</em> when prompted for notifications. Alerts will appear in your top notification tray.
               </li>
               <li>
                 <strong className="text-neutral-800">iPhone / iPad (iOS 16.4+):</strong> In Safari, tap the <span className="font-semibold text-neutral-800">Share icon</span> (box with arrow pointing up) &rarr; select <span className="font-semibold text-neutral-800">"Add to Home Screen"</span>. Launch the app from your Home Screen to activate notifications.

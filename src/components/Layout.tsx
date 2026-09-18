@@ -11,6 +11,9 @@ import {
   requestPushNotificationPermission, 
   triggerMobilePushNotification,
   isInIframe,
+  isAndroidApk,
+  ensureAndroidNotificationChannel,
+  setupNotificationListeners,
   playEmergencyAlertSound,
   triggerDeviceVibration
 } from '../lib/pushNotifications';
@@ -26,14 +29,41 @@ export default function Layout() {
   const [permissionStatus, setPermissionStatus] = useState<NotificationPermission | 'unsupported'>('default');
   const [showPermissionBanner, setShowPermissionBanner] = useState(true);
   const [isIframeDetected, setIsIframeDetected] = useState(false);
+  const [isApkDetected, setIsApkDetected] = useState(false);
   const [isEnabling, setIsEnabling] = useState(false);
+  const [activeAlert, setActiveAlert] = useState<{ title: string; body: string; url: string } | null>(null);
   const mountedAtRef = useRef(Date.now());
   const hasLoadedInitialRef = useRef(false);
 
   useEffect(() => {
+    const isApk = isAndroidApk();
+    setIsApkDetected(isApk);
     setIsIframeDetected(isInIframe());
     setPermissionStatus(getNotificationPermissionStatus());
-  }, []);
+
+    // Initialize native Android channel and notification action listener
+    ensureAndroidNotificationChannel();
+    setupNotificationListeners((url) => {
+      navigate(url);
+    });
+
+    // In-app emergency notification receiver for foreground alerts
+    const handleEmergencyEvent = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail) {
+        setActiveAlert({
+          title: detail.title || '🚨 Urgent Disaster Task',
+          body: detail.body || 'A new emergency request requires response.',
+          url: detail.url || '/volunteer-dashboard',
+        });
+      }
+    };
+
+    window.addEventListener('dvn:emergency_notification', handleEmergencyEvent);
+    return () => {
+      window.removeEventListener('dvn:emergency_notification', handleEmergencyEvent);
+    };
+  }, [navigate]);
 
   // Listen for open/submitted emergency requests
   useEffect(() => {
@@ -51,10 +81,15 @@ export default function Layout() {
       snapshot.docChanges().forEach((change) => {
         if (change.type === 'added') {
           const req = { id: change.doc.id, ...change.doc.data() } as Request & { id: string };
-          if (req.createdAt && req.createdAt >= mountedAtRef.current) {
+          const createdAt = typeof req.createdAt === 'number'
+            ? req.createdAt
+            : (req.createdAt as unknown as { toMillis?: () => number })?.toMillis?.() || Date.now();
+
+          // Trigger for new tasks arrived since app was open (with 2 min tolerance for clock skew)
+          if (createdAt >= mountedAtRef.current - 120000 || !req.createdAt) {
             setUnreadCount(prev => prev + 1);
 
-            // Push notification directly to mobile device tray / lock screen
+            // Push notification directly to mobile device tray / lock screen / Android status bar
             triggerMobilePushNotification({
               title: `🚨 Emergency Alert: ${req.type}`,
               body: `${req.peopleAffected || 1} people affected at ${req.location?.address || 'GPS coordinates'}. Tap to view task.`,
@@ -142,7 +177,7 @@ export default function Layout() {
   }, [userProfile?.id, userProfile?.role]);
 
   const handleEnablePushBanner = async () => {
-    if (isInIframe()) {
+    if (isInIframe() && !isApkDetected) {
       setIsNotifModalOpen(true);
       toast('Open in a new tab to grant device push permissions', {
         icon: '📲',
@@ -157,7 +192,7 @@ export default function Layout() {
       setPermissionStatus(res.permission);
       if (res.success) {
         setShowPermissionBanner(false);
-        toast.success('Mobile push alerts activated!', { icon: '🔔' });
+        toast.success(res.isApk ? 'Android phone notifications enabled!' : 'Mobile push alerts activated!', { icon: '🔔' });
         playEmergencyAlertSound();
         triggerDeviceVibration();
       } else {
@@ -299,11 +334,14 @@ export default function Layout() {
                 <Smartphone className="w-4 h-4 text-white" />
               </div>
               <div className="truncate">
-                <span className="font-bold">Mobile Device Alerts:</span> Get instant push notifications & sirens on your phone when tasks are created.
+                <span className="font-bold">{isApkDetected ? 'Android App Alerts:' : 'Mobile Device Alerts:'}</span>{' '}
+                {isApkDetected 
+                  ? 'Enable native Android status bar alerts and siren for urgent tasks.' 
+                  : 'Get instant push notifications & sirens on your phone when tasks are created.'}
               </div>
             </div>
             <div className="flex items-center gap-2 shrink-0 ml-3">
-              {isIframeDetected ? (
+              {isIframeDetected && !isApkDetected ? (
                 <a
                   href={window.location.href}
                   target="_blank"
@@ -319,7 +357,7 @@ export default function Layout() {
                   disabled={isEnabling}
                   className="inline-flex items-center gap-1.5 px-3 py-1 bg-white text-red-700 font-bold rounded-lg hover:bg-red-50 transition-colors shadow-xs text-xs whitespace-nowrap cursor-pointer disabled:opacity-75"
                 >
-                  {isEnabling ? 'Enabling...' : 'Enable on Phone'}
+                  {isEnabling ? 'Enabling...' : (isApkDetected ? 'Enable Android Alerts' : 'Enable on Phone')}
                 </button>
               )}
               <button
@@ -333,6 +371,42 @@ export default function Layout() {
                 onClick={() => setShowPermissionBanner(false)}
                 className="p-1 hover:bg-white/10 rounded-md text-red-200 hover:text-white transition-colors"
                 title="Dismiss"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Foreground Heads-Up Emergency Notification (Active on Phone / APK) */}
+        {activeAlert && (
+          <div className="bg-red-600 text-white px-4 py-3 shadow-lg border-b-2 border-red-800 flex items-center justify-between animate-in slide-in-from-top duration-300">
+            <div className="flex items-center gap-3 overflow-hidden">
+              <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center shrink-0 animate-pulse">
+                <Bell className="w-5 h-5 text-white" />
+              </div>
+              <div className="min-w-0">
+                <div className="font-extrabold text-sm sm:text-base flex items-center gap-2">
+                  <span className="truncate">{activeAlert.title}</span>
+                  <span className="px-2 py-0.5 text-[10px] uppercase font-bold bg-white text-red-700 rounded-full tracking-wider shrink-0">Urgent</span>
+                </div>
+                <p className="text-xs text-red-100 truncate">{activeAlert.body}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0 ml-3">
+              <button
+                onClick={() => {
+                  navigate(activeAlert.url);
+                  setActiveAlert(null);
+                }}
+                className="px-3.5 py-1.5 bg-white text-red-700 font-bold rounded-lg hover:bg-red-50 text-xs shadow-sm transition-transform active:scale-95"
+              >
+                View Task
+              </button>
+              <button
+                onClick={() => setActiveAlert(null)}
+                className="p-1 text-red-200 hover:text-white rounded-md transition-colors"
+                title="Dismiss alert"
               >
                 <X className="w-4 h-4" />
               </button>
