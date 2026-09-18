@@ -4,13 +4,17 @@ import { collection, query, where, doc, updateDoc, onSnapshot } from 'firebase/f
 import { db } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { Request } from '../types';
-import { MapPin, Users, AlertTriangle, CheckCircle, Navigation, ShieldAlert, FileText, Phone } from 'lucide-react';
+import { MapPin, Users, AlertTriangle, CheckCircle, Navigation, ShieldAlert, FileText, Phone, Smartphone, Bell } from 'lucide-react';
+import { getNotificationPermissionStatus } from '../lib/pushNotifications';
+import NotificationSettingsModal from '../components/NotificationSettingsModal';
 
 export default function VolunteerDashboard() {
   const { userProfile } = useAuth();
   const navigate = useNavigate();
   const [tasks, setTasks] = useState<(Request & { id: string })[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showNotifModal, setShowNotifModal] = useState(false);
+  const [notifGranted, setNotifGranted] = useState(() => getNotificationPermissionStatus() === 'granted');
 
   useEffect(() => {
     if (!userProfile) return;
@@ -103,11 +107,26 @@ export default function VolunteerDashboard() {
   return (
     <div className="max-w-5xl mx-auto space-y-8">
       
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-neutral-900">Volunteer Dashboard</h1>
           <p className="text-neutral-500">Find nearby requests and manage your active tasks.</p>
         </div>
+        <button
+          onClick={() => setShowNotifModal(true)}
+          className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold bg-white border border-neutral-200 text-neutral-700 shadow-xs hover:bg-neutral-50 transition-colors w-fit"
+          title="Configure mobile device notifications"
+        >
+          <Smartphone className="w-4 h-4 text-red-600" />
+          <span>Mobile Device Alerts:</span>
+          {notifGranted ? (
+            <span className="text-emerald-700 font-bold flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Active
+            </span>
+          ) : (
+            <span className="text-amber-700 font-bold underline">Tap to Enable</span>
+          )}
+        </button>
       </div>
 
       {assignedTasks.length > 0 && (
@@ -242,6 +261,13 @@ export default function VolunteerDashboard() {
         )}
       </div>
 
+      <NotificationSettingsModal
+        isOpen={showNotifModal}
+        onClose={() => {
+          setShowNotifModal(false);
+          setNotifGranted(getNotificationPermissionStatus() === 'granted');
+        }}
+      />
     </div>
   );
 }
